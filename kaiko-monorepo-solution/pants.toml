@@ -1,0 +1,31 @@
+[GLOBAL]
+pants_version = "2.22.0"
+backend_packages = [
+  "pants.backend.python",
+  "pants.backend.python.lint.black",
+  "pants.backend.python.lint.isort",
+  "pants.backend.python.lint.ruff",
+  "pants.backend.python.typecheck.mypy",
+  "pants.backend.docker",
+  "pants.backend.build_files.fmt.black",
+]
+
+# Use Python 3.10–3.11 to be safe with common ML wheels.
+[python]
+interpreter_constraints = ["CPython>=3.10,<3.12"]
+
+[python.resolves]
+python-default = "3rdparty/python/requirements.txt"
+
+[pytest]
+args = ["-q", "-ra", "--maxfail=1"]
+
+[python-infer]
+# Turn on dependency inference; it speeds up authoring and CI.
+use_rust_parser = true
+
+[tailor]
+ignore_paths = ["dist", "build", "node_modules"]
+
+[pytest-integration]
+# (placeholder for future integration tests config)

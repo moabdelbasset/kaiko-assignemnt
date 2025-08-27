@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop, feature/** ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('3rdparty/python/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Cache Pants
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pants
+          key: pants-${{ runner.os }}-${{ hashFiles('pants.toml', '3rdparty/python/requirements.txt') }}
+          restore-keys: |
+            pants-${{ runner.os }}-
+
+      - name: Bootstrap toolchain
+        run: |
+          python -m pip install --upgrade pip pipx
+          pipx install pantsbuild.pants==2.22.0
+          pip install -r 3rdparty/python/requirements.txt
+
+      - name: Pre-commit (fast checks)
+        run: |
+          pre-commit run --all-files
+
+      - name: Compute BASE_REF
+        id: base
+        run: |
+          echo "base_ref=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD || git merge-base origin/main HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Lint & Test (incremental)
+        run: |
+          ./pants fmt --changed-since="${{ steps.base.outputs.base_ref }}" ::
+          ./pants lint --changed-since="${{ steps.base.outputs.base_ref }}" ::
+          ./pants test --changed-since="${{ steps.base.outputs.base_ref }}" ::
+
+  docker-build:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Data Processor image (only if service or shared libs changed)
+        if: contains(github.event.head_commit.message, '[build-dp]') || true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/data_processor.Dockerfile
+          push: false
+          tags: data-processor:ci
+
+      - name: Build Model Service image (only if service or shared libs changed)
+        if: contains(github.event.head_commit.message, '[build-ml]') || true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/model_service.Dockerfile
+          push: false
+          tags: model-service:ci

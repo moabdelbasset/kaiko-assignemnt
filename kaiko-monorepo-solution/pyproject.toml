@@ -1,0 +1,31 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["common_utils", "data_processor", "model_service"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "UP", "B"]
+ignore = []
+exclude = ["dist", "build", ".venv", "venv"]
+
+[tool.pytest.ini_options]
+testpaths = ["services", "libs"]
+addopts = "-q -ra --maxfail=1 --cov=."
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict_optional = false
+warn_unused_ignores = true
+show_error_codes = true
+allow_redefinition = true
+exclude = "dist|build|.venv|venv"
